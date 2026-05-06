@@ -1,0 +1,16 @@
+{
+	"manifest_version": 1,
+	"id": "joplin.plugin.ir-anki",
+	"app_min_version": "3.5",
+	"version": "1.0.0",
+	"name": "Joplin Incremental Reading",
+	"description": "Incremental reading workflow for Joplin using Anki as scheduler",
+	"author": "sq6dao",
+	"homepage_url": "",
+	"repository_url": "",
+	"keywords": [],
+	"categories": [],
+	"screenshots": [],
+	"icons": {},
+	"promo_tile": {}
+}
