@@ -2,7 +2,7 @@ import { request as httpRequest } from 'http';
 import { URL } from 'url';
 
 import { titleForChunk } from '../chunks/repository';
-import type { ChunkRecord } from '../chunks/types';
+import type { ChunkRecord, SchedulerCardState } from '../chunks/types';
 
 export const ANKI_CONNECT_VERSION = 6;
 export const IR_CHUNK_MODEL_NAME = 'IRChunk';
@@ -24,10 +24,20 @@ export interface SchedulerCardBinding {
 	cardId: number;
 }
 
+export type AnkiReviewRating = 1 | 2 | 3 | 4;
+
+export interface SchedulerCardInfo {
+	cardId: number;
+	due: number | null;
+	state: SchedulerCardState | null;
+}
+
 export interface AnkiGateway {
 	ensureSchedulerResources(sourceNoteId: string): Promise<void>;
 	createChunkNote(chunk: ChunkRecord, joplinNoteId: string): Promise<SchedulerCardBinding>;
 	getDueChunkCardIds(): Promise<number[]>;
+	reviewCard(cardId: number, rating: AnkiReviewRating): Promise<void>;
+	getCardSchedulerInfo(cardId: number): Promise<SchedulerCardInfo>;
 }
 
 export interface AnkiConnectRequest {
@@ -114,6 +124,32 @@ export class AnkiConnectGateway implements AnkiGateway {
 		});
 	}
 
+	public async reviewCard(cardId: number, rating: AnkiReviewRating): Promise<void> {
+		await this.invoke<boolean[]>('answerCards', {
+			answers: [{
+				cardId,
+				ease: rating,
+			}],
+		});
+	}
+
+	public async getCardSchedulerInfo(cardId: number): Promise<SchedulerCardInfo> {
+		const cards = await this.invoke<unknown[]>('cardsInfo', {
+			cards: [cardId],
+		});
+		const card = cards[0];
+
+		if (!isRecord(card)) {
+			throw new Error(`AnkiConnect did not return scheduler info for card ${cardId}.`);
+		}
+
+		return {
+			cardId,
+			due: typeof card.due === 'number' ? card.due : null,
+			state: schedulerStateFromCardInfo(card),
+		};
+	}
+
 	private async invoke<T>(action: string, params?: Record<string, unknown>): Promise<T> {
 		const response = await this.transport({
 			action,
@@ -191,10 +227,51 @@ function createHttpTransport(endpoint: string): AnkiConnectTransport {
 	};
 }
 
+function schedulerStateFromCardInfo(card: Record<string, unknown>): SchedulerCardState | null {
+	if (card.queue === -1) return 'suspended';
+
+	if (typeof card.type === 'string') {
+		return schedulerStateFromString(card.type);
+	}
+
+	if (typeof card.type === 'number') {
+		return schedulerStateFromNumber(card.type);
+	}
+
+	return null;
+}
+
+function schedulerStateFromString(value: string): SchedulerCardState | null {
+	if (
+		value === 'new' ||
+		value === 'learn' ||
+		value === 'review' ||
+		value === 'relearn' ||
+		value === 'suspended'
+	) {
+		return value;
+	}
+
+	return null;
+}
+
+function schedulerStateFromNumber(value: number): SchedulerCardState | null {
+	if (value === 0) return 'new';
+	if (value === 1) return 'learn';
+	if (value === 2) return 'review';
+	if (value === 3) return 'relearn';
+
+	return null;
+}
+
 function isAnkiConnectResponse(value: unknown): value is AnkiConnectResponse {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
 
 	const candidate = value as Record<string, unknown>;
 
 	return 'result' in candidate && (candidate.error === null || typeof candidate.error === 'string');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

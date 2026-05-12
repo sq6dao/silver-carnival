@@ -98,6 +98,68 @@ test('getDueChunkCardIds queries due and new IRChunk cards', async () => {
 	});
 });
 
+test('reviewCard sends an Anki answerCards request', async () => {
+	const transport = new FakeAnkiTransport();
+	const gateway = new AnkiConnectGateway({ transport: transport.send });
+
+	await gateway.reviewCard(456, 3);
+
+	assert.deepEqual(transport.actions(), ['answerCards']);
+	assert.deepEqual(transport.calls[0].params, {
+		answers: [{
+			cardId: 456,
+			ease: 3,
+		}],
+	});
+});
+
+test('getCardSchedulerInfo maps cardsInfo into scheduler metadata', async () => {
+	const transport = new FakeAnkiTransport({
+		cardsInfoResult: [{
+			cardId: 456,
+			type: 2,
+			queue: 2,
+			due: 42,
+		}],
+	});
+	const gateway = new AnkiConnectGateway({ transport: transport.send });
+
+	assert.deepEqual(await gateway.getCardSchedulerInfo(456), {
+		cardId: 456,
+		due: 42,
+		state: 'review',
+	});
+	assert.deepEqual(transport.calls[0].params, {
+		cards: [456],
+	});
+});
+
+test('getCardSchedulerInfo maps suspended cards from queue', async () => {
+	const transport = new FakeAnkiTransport({
+		cardsInfoResult: [{
+			cardId: 456,
+			type: 2,
+			queue: -1,
+			due: 42,
+		}],
+	});
+	const gateway = new AnkiConnectGateway({ transport: transport.send });
+
+	assert.equal((await gateway.getCardSchedulerInfo(456)).state, 'suspended');
+});
+
+test('getCardSchedulerInfo throws when card info is missing', async () => {
+	const transport = new FakeAnkiTransport({
+		cardsInfoResult: [],
+	});
+	const gateway = new AnkiConnectGateway({ transport: transport.send });
+
+	await assert.rejects(
+		() => gateway.getCardSchedulerInfo(456),
+		/did not return scheduler info/,
+	);
+});
+
 test('AnkiConnect errors include the failing action name', async () => {
 	const gateway = new AnkiConnectGateway({
 		transport: async request => ({
@@ -126,6 +188,7 @@ interface FakeAnkiTransportOptions {
 	modelNames?: string[];
 	addNoteResult?: number;
 	findCardsResult?: number[];
+	cardsInfoResult?: unknown[];
 }
 
 class FakeAnkiTransport {
@@ -162,6 +225,22 @@ class FakeAnkiTransport {
 
 		if (request.action === 'findCards') {
 			return { result: this.options.findCardsResult ?? [456], error: null };
+		}
+
+		if (request.action === 'answerCards') {
+			return { result: [true], error: null };
+		}
+
+		if (request.action === 'cardsInfo') {
+			return {
+				result: this.options.cardsInfoResult ?? [{
+					cardId: 456,
+					type: 2,
+					queue: 2,
+					due: 42,
+				}],
+				error: null,
+			};
 		}
 
 		throw new Error(`Unexpected action: ${request.action}`);
