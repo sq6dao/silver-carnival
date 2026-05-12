@@ -7,6 +7,7 @@ publish/
 *.jpl
 
 # Test and coverage outputs
+.test-dist/
 coverage/
 .nyc_output/
 

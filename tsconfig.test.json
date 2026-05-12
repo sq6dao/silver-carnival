@@ -1,0 +1,22 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"outDir": "./.test-dist",
+		"rootDir": ".",
+		"types": [
+			"node"
+		],
+		"noEmitOnError": true,
+		"skipLibCheck": true
+	},
+	"include": [
+		"api/**/*.ts",
+		"src/**/*.ts",
+		"tests/**/*.ts"
+	],
+	"exclude": [
+		"dist",
+		"node_modules",
+		"publish"
+	]
+}
