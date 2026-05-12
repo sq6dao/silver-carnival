@@ -96,6 +96,8 @@ Out of scope:
 
 ## M3 — Chunk Splitting / Card Creation
 
+Status: implemented.
+
 Implementation steps:
 
 1. Add chunk splitting commands.

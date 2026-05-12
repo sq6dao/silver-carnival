@@ -10,7 +10,7 @@ source note and, later, to any scheduler or study cards created in Anki.
 
 ## Current Status
 
-M1 and M2 are implemented as a working review-loop MVP:
+M1 through M3 are implemented:
 
 - Heading-based chunk extraction.
 - Joplin-backed chunk repository using an `IR Chunks` notebook.
@@ -22,11 +22,13 @@ M1 and M2 are implemented as a working review-loop MVP:
 - `Tools > Show Due Chunks`.
 - Due chunk grading in Joplin with Anki scheduler sync.
 - Scheduler metadata sync back into chunk YAML.
+- `Tools > Split Current IR Chunk`.
+- `Tools > Create Basic Card from Chunk`.
+- `Tools > Create Cloze Card from Chunk`.
+- Created-card provenance in chunk YAML.
 
 Out of scope:
 
-- Splitting.
-- Created study cards.
 - Staleness detection.
 - Editing chunk text during review.
 
@@ -99,8 +101,41 @@ resources automatically:
 - Deck: `IR::Chunks::<sourceNoteId>`
 - Note type: `IRChunk`
 
+When study cards are created from chunks, the plugin also creates:
+
+- Deck: `IR::Cards::<sourceNoteId>`
+- Note types: `IRBasic`, `IRCloze`
+
 If AnkiConnect is unavailable, enabling incremental reading fails with a
 message and any chunk notes created during that failed attempt are deleted.
+
+## M3 Workflows
+
+To split an active chunk:
+
+1. Open the chunk note in Joplin.
+2. Insert this marker between each desired child chunk:
+
+```markdown
+<!-- ir-split -->
+```
+
+3. Run `Tools > Split Current IR Chunk`.
+
+The plugin creates child chunk notes, creates fresh scheduler cards for the
+children, suspends the parent scheduler card, and marks the parent chunk as
+`superseded`.
+
+To create a Basic card from a chunk, select an active chunk note and run
+`Tools > Create Basic Card from Chunk`. The chunk title becomes the card
+front and the chunk body becomes the back.
+
+To create a Cloze card, add Anki cloze syntax to the chunk body, for example
+`{{c1::answer}}`, then run `Tools > Create Cloze Card from Chunk`.
+
+Created cards are linked in the chunk YAML under `createdCards`. Each link
+stores the Anki note ID, card IDs, deck, model, source chunk ID, source chunk
+version, and source text hash.
 
 ## Smoke Test
 
@@ -130,9 +165,16 @@ Then:
 10. Click `Again`, `Hard`, `Good`, or `Easy` for a due chunk.
 11. Confirm the panel refreshes after grading.
 12. Confirm the chunk note YAML updates `scheduler.lastSyncAt`.
+13. Open a chunk note, insert `<!-- ir-split -->`, and run
+    `Tools > Split Current IR Chunk`.
+14. Confirm child chunk notes and child scheduler cards are created, and the
+    parent chunk lifecycle is `superseded`.
+15. Select an active chunk note and run
+    `Tools > Create Basic Card from Chunk`.
+16. Confirm Anki created the card in `IR::Cards::<sourceNoteId>` and the
+    chunk YAML has a new `createdCards` entry.
 
-The Due Chunks panel is read-only for chunk text. Splitting chunks and
-creating study cards are planned for a later milestone.
+The Due Chunks panel is read-only for chunk text.
 
 ## Development Plugin Path
 

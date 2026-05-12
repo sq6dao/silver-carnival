@@ -319,6 +319,10 @@ User can:
 
 - Create Basic/Cloze card.
 - Store `CreatedCardLink` in YAML.
+- Basic cards use the chunk title as the front and the chunk body as the
+  back.
+- Cloze cards use the chunk body and require Anki cloze syntax such as
+  `{{c1::answer}}`.
 
 ## 10. Chunk Splitting
 
@@ -331,6 +335,8 @@ Given chunk `C1`:
 
 Rules:
 
+- M3 uses `<!-- ir-split -->` in the selected chunk note body as the split
+  boundary.
 - Never reuse scheduler cards.
 - Children start fresh scheduling.
 - Parent is kept for provenance.
@@ -423,16 +429,13 @@ interface ReviewQueueService {
 - Grading.
 - Sync.
 
-### M3 - Splitting
+### M3 - Splitting and Card Creation
 
 - Lineage.
 - Scheduler regeneration.
-
-### M4 - Card Creation
-
 - Basic/cloze cards.
 
-### M5 - Staleness
+### M4 - Staleness
 
 - Detect and mark stale cards.
 
@@ -444,9 +447,9 @@ interface ReviewQueueService {
 - Deletion handling?
 - Offline mode?
 
-## 17. Next Step
+## 17. Current Implementation
 
-Implement M1:
+Implemented through M3:
 
 - Chunk extraction based on headings.
 - YAML parsing/serialization.
@@ -454,3 +457,12 @@ Implement M1:
 - Minimal Anki gateway.
 - Mapping between chunk and card.
 - Simple Due Chunks view.
+- Joplin review grading synced to Anki scheduler cards.
+- Marker-based chunk splitting.
+- Created Basic and Cloze cards with provenance links.
+
+Next milestone candidates:
+
+- Staleness and reconciliation for edited chunks or deleted Anki cards.
+- Better chunk editing workflows.
+- More flexible card creation templates.
