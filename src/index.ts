@@ -4,13 +4,33 @@ import { MenuItemLocation, ToastType, ToolbarButtonLocation } from 'api/types';
 import { AnkiConnectGateway } from './anki/gateway';
 import { JoplinChunkRepository } from './chunks/repository';
 import type { JoplinSourceNote } from './chunks/types';
+import {
+	refreshDueChunksPanel,
+	renderDueChunksErrorHtml,
+} from './plugin/due-panel';
 import { EnableIncrementalReadingService } from './plugin/enable-ir';
+import { AnkiReviewQueueService } from './review/queue';
 
 joplin.plugins.register({
 	onStart: async function() {
 		const repository = new JoplinChunkRepository(joplin.data);
 		const ankiGateway = new AnkiConnectGateway();
 		const enableService = new EnableIncrementalReadingService(repository, ankiGateway);
+		const reviewQueue = new AnkiReviewQueueService(ankiGateway, repository);
+		const duePanelHandle = await joplin.views.panels.create('irAnkiDueChunksPanel');
+
+		const showDueChunks = async () => {
+			try {
+				await refreshDueChunksPanel(duePanelHandle, joplin.views.panels, reviewQueue);
+			} catch (error) {
+				await joplin.views.panels.setHtml(
+					duePanelHandle,
+					renderDueChunksErrorHtml(errorMessage(error)),
+				);
+			}
+
+			await joplin.views.panels.show(duePanelHandle, true);
+		};
 
 		await joplin.commands.register({
 			name: 'irAnkiEnableCurrentNote',
@@ -31,9 +51,22 @@ joplin.plugins.register({
 			},
 		});
 
+		await joplin.commands.register({
+			name: 'irAnkiShowDueChunks',
+			label: 'Show Due Chunks',
+			iconName: 'fas fa-calendar-check',
+			execute: showDueChunks,
+		});
+
 		await joplin.views.menuItems.create(
 			'irAnkiEnableCurrentNoteMenuItem',
 			'irAnkiEnableCurrentNote',
+			MenuItemLocation.Tools,
+		);
+
+		await joplin.views.menuItems.create(
+			'irAnkiShowDueChunksMenuItem',
+			'irAnkiShowDueChunks',
 			MenuItemLocation.Tools,
 		);
 
@@ -42,6 +75,12 @@ joplin.plugins.register({
 			'irAnkiEnableCurrentNote',
 			ToolbarButtonLocation.NoteToolbar,
 		);
+
+		await joplin.views.panels.onMessage(duePanelHandle, async message => {
+			if (message?.type === 'refresh') {
+				await showDueChunks();
+			}
+		});
 	},
 });
 
