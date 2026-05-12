@@ -44,7 +44,86 @@ Implementation steps:
    - Smoke-test in Joplin dev mode with AnkiConnect running.
 
 Out of scope:
-- Grading.
+- Grading. Deferred to M2.
 - Splitting.
 - Created study cards.
 - Staleness detection.
+
+## M2 — Review Loop / Grading Sync
+
+Goal: review due chunks in Joplin and send grades to Anki scheduler cards.
+
+Implementation steps:
+
+1. Extend the Anki gateway for review grading.
+   - Add `reviewCard(cardId, rating)`.
+   - Use Anki's normal answer buttons, with ratings `1` through `4`.
+   - Surface AnkiConnect errors clearly.
+
+2. Add grade controls to the Due Chunks panel.
+   - Show grade buttons for each due chunk.
+   - Send panel messages with the selected `ankiCardId` and rating.
+   - Keep the panel read-only for chunk text.
+
+3. Handle grading messages in the plugin.
+   - Send the selected rating to Anki.
+   - Refresh the Due Chunks panel after grading.
+   - Show a clear error if grading fails.
+
+4. Sync scheduler metadata after grading.
+   - Always update `scheduler.lastSyncAt`.
+   - Update `scheduler.lastKnownState` and `scheduler.lastKnownDue` when
+     AnkiConnect exposes them cleanly.
+   - Persist updated scheduler metadata back into chunk YAML.
+
+5. Add verification.
+   - Test Anki gateway grading request shape.
+   - Test panel grade message rendering and handling.
+   - Test scheduler metadata updates.
+   - Test queue refresh after grading.
+   - Run `npm test`.
+   - Run `npm run dist`.
+   - Smoke-test grading in Joplin dev mode with AnkiConnect running.
+
+Out of scope:
+- Splitting chunks.
+- Created study cards.
+- Staleness detection.
+- Editing chunk text during review.
+- Custom scheduling policy beyond Anki ratings.
+
+## M3 — Chunk Splitting / Card Creation
+
+Implementation steps:
+
+1. Add chunk splitting commands.
+   - Split a selected chunk into child chunks.
+   - Preserve `rootChunkId`.
+   - Set each child chunk's `parentChunkId`.
+   - Mark the parent chunk as `superseded`.
+
+2. Regenerate scheduler cards for split chunks.
+   - Suspend the parent chunk's scheduler card.
+   - Create fresh scheduler cards for each child chunk.
+   - Persist each child chunk's scheduler binding in YAML.
+
+3. Add card creation from chunks.
+   - Add commands to create Basic cards.
+   - Add commands to create Cloze cards.
+   - Create cards in `IR::Cards::<sourceNoteId>`.
+   - Store `CreatedCardLink` entries in chunk YAML.
+
+4. Preserve provenance.
+   - Link created cards to the source chunk ID.
+   - Store the source chunk version.
+   - Store the source text hash.
+   - Never reassign created cards to newer chunk versions.
+
+5. Add verification.
+   - Test parent superseding and child lineage.
+   - Test scheduler regeneration after splitting.
+   - Test Basic card creation.
+   - Test Cloze card creation.
+   - Test `CreatedCardLink` persistence.
+   - Run `npm test`.
+   - Run `npm run dist`.
