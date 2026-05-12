@@ -3,9 +3,12 @@ import * as assert from 'node:assert/strict';
 
 import {
 	AnkiConnectGateway,
+	IR_BASIC_MODEL_NAME,
 	IR_CHUNK_MODEL_FIELDS,
 	IR_CHUNK_MODEL_NAME,
+	IR_CLOZE_MODEL_NAME,
 	chunkDeckName,
+	createdCardsDeckName,
 	type AnkiConnectRequest,
 	type AnkiConnectResponse,
 	type AnkiConnectTransport,
@@ -34,6 +37,32 @@ test('ensureSchedulerResources reuses an existing scheduler model', async () => 
 	const gateway = new AnkiConnectGateway({ transport: transport.send });
 
 	await gateway.ensureSchedulerResources('sourceA');
+
+	assert.deepEqual(transport.actions(), ['createDeck', 'modelNames']);
+});
+
+test('ensureCreatedCardResources creates card deck and missing models', async () => {
+	const transport = new FakeAnkiTransport({
+		modelNames: [IR_CHUNK_MODEL_NAME],
+	});
+	const gateway = new AnkiConnectGateway({ transport: transport.send });
+
+	await gateway.ensureCreatedCardResources('sourceA');
+
+	assert.deepEqual(transport.actions(), ['createDeck', 'modelNames', 'createModel', 'createModel']);
+	assert.deepEqual(transport.calls[0].params, { deck: createdCardsDeckName('sourceA') });
+	assert.equal(transport.calls[2].params?.modelName, IR_BASIC_MODEL_NAME);
+	assert.equal(transport.calls[3].params?.modelName, IR_CLOZE_MODEL_NAME);
+	assert.equal(transport.calls[3].params?.isCloze, true);
+});
+
+test('ensureCreatedCardResources reuses existing card models', async () => {
+	const transport = new FakeAnkiTransport({
+		modelNames: [IR_BASIC_MODEL_NAME, IR_CLOZE_MODEL_NAME],
+	});
+	const gateway = new AnkiConnectGateway({ transport: transport.send });
+
+	await gateway.ensureCreatedCardResources('sourceA');
 
 	assert.deepEqual(transport.actions(), ['createDeck', 'modelNames']);
 });
@@ -73,6 +102,75 @@ test('createChunkNote adds an Anki note and returns its first card id', async ()
 	assert.equal(fields.displayTitle, 'First');
 });
 
+test('createBasicCard adds an independent Basic card with provenance fields', async () => {
+	const transport = new FakeAnkiTransport({
+		addNoteResult: 123,
+		findCardsResult: [456],
+	});
+	const gateway = new AnkiConnectGateway({ transport: transport.send });
+	const chunk = sampleChunk();
+
+	assert.deepEqual(await gateway.createBasicCard(chunk, 'Front', 'Back'), {
+		noteId: 123,
+		cardIds: [456],
+	});
+
+	const addNote = transport.calls[0].params?.note as Record<string, unknown>;
+	assert.equal(addNote.deckName, createdCardsDeckName('sourceA'));
+	assert.equal(addNote.modelName, IR_BASIC_MODEL_NAME);
+	assert.deepEqual(addNote.tags, ['joplin-ir', 'ir-created-card', 'ir-basic']);
+	assert.deepEqual(addNote.options, {
+		allowDuplicate: false,
+		duplicateScope: 'deck',
+	});
+	assert.deepEqual(addNote.fields, {
+		Front: 'Front',
+		Back: 'Back',
+		sourceChunkId: chunk.id,
+		sourceChunkVersion: String(chunk.version),
+		sourceTextHash: chunk.textHash,
+	});
+});
+
+test('createClozeCard adds an independent Cloze card with provenance fields', async () => {
+	const transport = new FakeAnkiTransport({
+		addNoteResult: 123,
+		findCardsResult: [456, 457],
+	});
+	const gateway = new AnkiConnectGateway({ transport: transport.send });
+	const chunk = sampleChunk();
+
+	assert.deepEqual(await gateway.createClozeCard(chunk, '{{c1::Front}}', 'Extra'), {
+		noteId: 123,
+		cardIds: [456, 457],
+	});
+
+	const addNote = transport.calls[0].params?.note as Record<string, unknown>;
+	assert.equal(addNote.deckName, createdCardsDeckName('sourceA'));
+	assert.equal(addNote.modelName, IR_CLOZE_MODEL_NAME);
+	assert.deepEqual(addNote.tags, ['joplin-ir', 'ir-created-card', 'ir-cloze']);
+	assert.deepEqual(addNote.fields, {
+		Text: '{{c1::Front}}',
+		'Back Extra': 'Extra',
+		sourceChunkId: chunk.id,
+		sourceChunkVersion: String(chunk.version),
+		sourceTextHash: chunk.textHash,
+	});
+});
+
+test('created card creation throws when Anki returns no cards', async () => {
+	const transport = new FakeAnkiTransport({
+		addNoteResult: 123,
+		findCardsResult: [],
+	});
+	const gateway = new AnkiConnectGateway({ transport: transport.send });
+
+	await assert.rejects(
+		() => gateway.createBasicCard(sampleChunk(), 'Front', 'Back'),
+		/did not return cards/,
+	);
+});
+
 test('createChunkNote throws when Anki returns no scheduler card', async () => {
 	const transport = new FakeAnkiTransport({
 		addNoteResult: 123,
@@ -84,6 +182,18 @@ test('createChunkNote throws when Anki returns no scheduler card', async () => {
 		() => gateway.createChunkNote(sampleChunk(), 'joplin_note_1'),
 		/did not return a card/,
 	);
+});
+
+test('suspendCard sends an Anki suspend request', async () => {
+	const transport = new FakeAnkiTransport();
+	const gateway = new AnkiConnectGateway({ transport: transport.send });
+
+	await gateway.suspendCard(456);
+
+	assert.deepEqual(transport.actions(), ['suspend']);
+	assert.deepEqual(transport.calls[0].params, {
+		cards: [456],
+	});
 });
 
 test('getDueChunkCardIds queries due and new IRChunk cards', async () => {
@@ -229,6 +339,10 @@ class FakeAnkiTransport {
 
 		if (request.action === 'answerCards') {
 			return { result: [true], error: null };
+		}
+
+		if (request.action === 'suspend') {
+			return { result: true, error: null };
 		}
 
 		if (request.action === 'cardsInfo') {

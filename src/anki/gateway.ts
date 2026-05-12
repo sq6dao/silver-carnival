@@ -6,6 +6,8 @@ import type { ChunkRecord, SchedulerCardState } from '../chunks/types';
 
 export const ANKI_CONNECT_VERSION = 6;
 export const IR_CHUNK_MODEL_NAME = 'IRChunk';
+export const IR_BASIC_MODEL_NAME = 'IRBasic';
+export const IR_CLOZE_MODEL_NAME = 'IRCloze';
 
 export const IR_CHUNK_MODEL_FIELDS = [
 	'chunkId',
@@ -32,12 +34,21 @@ export interface SchedulerCardInfo {
 	state: SchedulerCardState | null;
 }
 
+export interface CreatedCardBinding {
+	noteId: number;
+	cardIds: number[];
+}
+
 export interface AnkiGateway {
 	ensureSchedulerResources(sourceNoteId: string): Promise<void>;
+	ensureCreatedCardResources(sourceNoteId: string): Promise<void>;
 	createChunkNote(chunk: ChunkRecord, joplinNoteId: string): Promise<SchedulerCardBinding>;
+	createBasicCard(chunk: ChunkRecord, front: string, back: string): Promise<CreatedCardBinding>;
+	createClozeCard(chunk: ChunkRecord, text: string, backExtra: string): Promise<CreatedCardBinding>;
 	getDueChunkCardIds(): Promise<number[]>;
 	reviewCard(cardId: number, rating: AnkiReviewRating): Promise<void>;
 	getCardSchedulerInfo(cardId: number): Promise<SchedulerCardInfo>;
+	suspendCard(cardId: number): Promise<void>;
 }
 
 export interface AnkiConnectRequest {
@@ -72,18 +83,22 @@ export class AnkiConnectGateway implements AnkiGateway {
 
 		const modelNames = await this.invoke<string[]>('modelNames');
 		if (!modelNames.includes(IR_CHUNK_MODEL_NAME)) {
-			await this.invoke('createModel', {
-				modelName: IR_CHUNK_MODEL_NAME,
-				inOrderFields: IR_CHUNK_MODEL_FIELDS,
-				css: '.card { font-family: sans-serif; font-size: 18px; text-align: left; color: #111; background: #fff; }',
-				cardTemplates: [
-					{
-						Name: 'IR Chunk',
-						Front: 'IR Chunk: {{displayTitle}}',
-						Back: 'Reviewed in Joplin',
-					},
-				],
-			});
+			await this.createIrChunkModel();
+		}
+	}
+
+	public async ensureCreatedCardResources(sourceNoteId: string): Promise<void> {
+		await this.invoke('createDeck', {
+			deck: createdCardsDeckName(sourceNoteId),
+		});
+
+		const modelNames = await this.invoke<string[]>('modelNames');
+		if (!modelNames.includes(IR_BASIC_MODEL_NAME)) {
+			await this.createIrBasicModel();
+		}
+
+		if (!modelNames.includes(IR_CLOZE_MODEL_NAME)) {
+			await this.createIrClozeModel();
 		}
 	}
 
@@ -118,6 +133,44 @@ export class AnkiConnectGateway implements AnkiGateway {
 		};
 	}
 
+	public async createBasicCard(
+		chunk: ChunkRecord,
+		front: string,
+		back: string,
+	): Promise<CreatedCardBinding> {
+		return this.addCreatedCardNote({
+			deckName: createdCardsDeckName(chunk.sourceNoteId),
+			modelName: IR_BASIC_MODEL_NAME,
+			fields: {
+				Front: front,
+				Back: back,
+				sourceChunkId: chunk.id,
+				sourceChunkVersion: String(chunk.version),
+				sourceTextHash: chunk.textHash,
+			},
+			tags: ['joplin-ir', 'ir-created-card', 'ir-basic'],
+		});
+	}
+
+	public async createClozeCard(
+		chunk: ChunkRecord,
+		text: string,
+		backExtra: string,
+	): Promise<CreatedCardBinding> {
+		return this.addCreatedCardNote({
+			deckName: createdCardsDeckName(chunk.sourceNoteId),
+			modelName: IR_CLOZE_MODEL_NAME,
+			fields: {
+				Text: text,
+				'Back Extra': backExtra,
+				sourceChunkId: chunk.id,
+				sourceChunkVersion: String(chunk.version),
+				sourceTextHash: chunk.textHash,
+			},
+			tags: ['joplin-ir', 'ir-created-card', 'ir-cloze'],
+		});
+	}
+
 	public async getDueChunkCardIds(): Promise<number[]> {
 		return this.invoke<number[]>('findCards', {
 			query: `note:${IR_CHUNK_MODEL_NAME} (is:new OR is:due)`,
@@ -150,6 +203,12 @@ export class AnkiConnectGateway implements AnkiGateway {
 		};
 	}
 
+	public async suspendCard(cardId: number): Promise<void> {
+		await this.invoke<boolean>('suspend', {
+			cards: [cardId],
+		});
+	}
+
 	private async invoke<T>(action: string, params?: Record<string, unknown>): Promise<T> {
 		const response = await this.transport({
 			action,
@@ -163,10 +222,89 @@ export class AnkiConnectGateway implements AnkiGateway {
 
 		return response.result as T;
 	}
+
+	private async addCreatedCardNote(note: {
+		deckName: string;
+		modelName: string;
+		fields: Record<string, string>;
+		tags: string[];
+	}): Promise<CreatedCardBinding> {
+		const noteId = await this.invoke<number>('addNote', {
+			note: {
+				...note,
+				options: {
+					allowDuplicate: false,
+					duplicateScope: 'deck',
+				},
+			},
+		});
+		const cardIds = await this.invoke<number[]>('findCards', {
+			query: `nid:${noteId}`,
+		});
+
+		if (!cardIds.length) {
+			throw new Error(`AnkiConnect did not return cards for created note ${noteId}.`);
+		}
+
+		return {
+			noteId,
+			cardIds,
+		};
+	}
+
+	private async createIrChunkModel(): Promise<void> {
+		await this.invoke('createModel', {
+			modelName: IR_CHUNK_MODEL_NAME,
+			inOrderFields: IR_CHUNK_MODEL_FIELDS,
+			css: '.card { font-family: sans-serif; font-size: 18px; text-align: left; color: #111; background: #fff; }',
+			cardTemplates: [
+				{
+					Name: 'IR Chunk',
+					Front: 'IR Chunk: {{displayTitle}}',
+					Back: 'Reviewed in Joplin',
+				},
+			],
+		});
+	}
+
+	private async createIrBasicModel(): Promise<void> {
+		await this.invoke('createModel', {
+			modelName: IR_BASIC_MODEL_NAME,
+			inOrderFields: ['Front', 'Back', 'sourceChunkId', 'sourceChunkVersion', 'sourceTextHash'],
+			css: '.card { font-family: sans-serif; font-size: 18px; text-align: left; color: #111; background: #fff; }',
+			cardTemplates: [
+				{
+					Name: 'Basic',
+					Front: '{{Front}}',
+					Back: '{{FrontSide}}<hr id="answer">{{Back}}',
+				},
+			],
+		});
+	}
+
+	private async createIrClozeModel(): Promise<void> {
+		await this.invoke('createModel', {
+			modelName: IR_CLOZE_MODEL_NAME,
+			inOrderFields: ['Text', 'Back Extra', 'sourceChunkId', 'sourceChunkVersion', 'sourceTextHash'],
+			css: '.card { font-family: sans-serif; font-size: 18px; text-align: left; color: #111; background: #fff; } .cloze { font-weight: bold; }',
+			isCloze: true,
+			cardTemplates: [
+				{
+					Name: 'Cloze',
+					Front: '{{cloze:Text}}',
+					Back: '{{cloze:Text}}<br>{{Back Extra}}',
+				},
+			],
+		});
+	}
 }
 
 export function chunkDeckName(sourceNoteId: string): string {
 	return `IR::Chunks::${sourceNoteId}`;
+}
+
+export function createdCardsDeckName(sourceNoteId: string): string {
+	return `IR::Cards::${sourceNoteId}`;
 }
 
 function schedulerFields(chunk: ChunkRecord, joplinNoteId: string): Record<string, string> {
