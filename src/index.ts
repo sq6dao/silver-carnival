@@ -5,10 +5,12 @@ import { AnkiConnectGateway } from './anki/gateway';
 import { JoplinChunkRepository } from './chunks/repository';
 import type { JoplinSourceNote } from './chunks/types';
 import {
+	handleDueChunksPanelMessage,
 	refreshDueChunksPanel,
 	renderDueChunksErrorHtml,
 } from './plugin/due-panel';
 import { EnableIncrementalReadingService } from './plugin/enable-ir';
+import { GradeChunkService } from './review/grading';
 import { AnkiReviewQueueService } from './review/queue';
 
 joplin.plugins.register({
@@ -17,6 +19,7 @@ joplin.plugins.register({
 		const ankiGateway = new AnkiConnectGateway();
 		const enableService = new EnableIncrementalReadingService(repository, ankiGateway);
 		const reviewQueue = new AnkiReviewQueueService(ankiGateway, repository);
+		const gradingService = new GradeChunkService(ankiGateway, repository);
 		const duePanelHandle = await joplin.views.panels.create('irAnkiDueChunksPanel');
 
 		const showDueChunks = async () => {
@@ -77,9 +80,12 @@ joplin.plugins.register({
 		);
 
 		await joplin.views.panels.onMessage(duePanelHandle, async message => {
-			if (message?.type === 'refresh') {
-				await showDueChunks();
-			}
+			await handleDueChunksPanelMessage(message, {
+				grading: gradingService,
+				panelHandle: duePanelHandle,
+				panels: joplin.views.panels,
+				reviewQueue,
+			});
 		});
 	},
 });

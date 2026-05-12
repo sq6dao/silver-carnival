@@ -4,11 +4,13 @@ import * as assert from 'node:assert/strict';
 import { extractHeadingChunks } from '../../src/chunks/extractor';
 import type { StoredChunk } from '../../src/chunks/repository';
 import {
+	handleDueChunksPanelMessage,
 	refreshDueChunksPanel,
 	renderDueChunksErrorHtml,
 	renderDueChunksHtml,
 	type PanelApi,
 } from '../../src/plugin/due-panel';
+import type { GradeChunkInput } from '../../src/review/grading';
 
 test('renderDueChunksHtml shows an empty state', () => {
 	const html = renderDueChunksHtml([]);
@@ -77,6 +79,83 @@ test('refreshDueChunksPanel writes panel HTML and returns due count', async () =
 	assert.match(panels.html, /Chunk Two/);
 });
 
+test('handleDueChunksPanelMessage refreshes and shows the panel', async () => {
+	const panels = new FakePanelApi();
+
+	const handled = await handleDueChunksPanelMessage({ type: 'refresh' }, {
+		grading: new FakeGradingService(),
+		panelHandle: 'panel_1',
+		panels,
+		reviewQueue: {
+			getDueChunks: async () => [storedChunk('note_1', 'Chunk One', 'Source Note', 1)],
+		},
+	});
+
+	assert.equal(handled, true);
+	assert.equal(panels.handle, 'panel_1');
+	assert.equal(panels.visible, true);
+	assert.match(panels.html, /Chunk One/);
+});
+
+test('handleDueChunksPanelMessage grades then refreshes the panel', async () => {
+	const panels = new FakePanelApi();
+	const grading = new FakeGradingService();
+
+	const handled = await handleDueChunksPanelMessage({
+		type: 'grade',
+		ankiCardId: 456,
+		rating: 3,
+	}, {
+		grading,
+		panelHandle: 'panel_1',
+		panels,
+		reviewQueue: {
+			getDueChunks: async () => [],
+		},
+	});
+
+	assert.equal(handled, true);
+	assert.deepEqual(grading.calls, [{ ankiCardId: 456, rating: 3 }]);
+	assert.equal(panels.visible, true);
+	assert.match(panels.html, /No due chunks\./);
+});
+
+test('handleDueChunksPanelMessage renders panel error when grading fails', async () => {
+	const panels = new FakePanelApi();
+	const grading = new FakeGradingService();
+	grading.error = new Error('Anki offline');
+
+	const handled = await handleDueChunksPanelMessage({
+		type: 'grade',
+		ankiCardId: 456,
+		rating: 3,
+	}, {
+		grading,
+		panelHandle: 'panel_1',
+		panels,
+		reviewQueue: {
+			getDueChunks: async () => [],
+		},
+	});
+
+	assert.equal(handled, true);
+	assert.equal(panels.visible, true);
+	assert.match(panels.html, /Anki offline/);
+});
+
+test('handleDueChunksPanelMessage ignores unknown messages', async () => {
+	const handled = await handleDueChunksPanelMessage({ type: 'unknown' }, {
+		grading: new FakeGradingService(),
+		panelHandle: 'panel_1',
+		panels: new FakePanelApi(),
+		reviewQueue: {
+			getDueChunks: async () => [],
+		},
+	});
+
+	assert.equal(handled, false);
+});
+
 function storedChunk(
 	joplinNoteId: string,
 	title: string,
@@ -105,6 +184,7 @@ function storedChunk(
 class FakePanelApi implements PanelApi {
 	public handle = '';
 	public html = '';
+	public visible = false;
 
 	public async setHtml(handle: string, html: string): Promise<string> {
 		this.handle = handle;
@@ -113,7 +193,18 @@ class FakePanelApi implements PanelApi {
 		return html;
 	}
 
-	public async show(): Promise<void> {
-		// No-op for this unit test.
+	public async show(_handle: string, show = true): Promise<void> {
+		this.visible = show;
+	}
+}
+
+class FakeGradingService {
+	public calls: GradeChunkInput[] = [];
+	public error: Error | null = null;
+
+	public async grade(input: GradeChunkInput): Promise<void> {
+		if (this.error) throw this.error;
+
+		this.calls.push(input);
 	}
 }
