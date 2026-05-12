@@ -2,7 +2,10 @@ import joplin from 'api';
 import { MenuItemLocation, ToastType, ToolbarButtonLocation } from 'api/types';
 
 import { AnkiConnectGateway } from './anki/gateway';
-import { JoplinChunkRepository } from './chunks/repository';
+import { CardCreationService } from './cards/creation';
+import { parseChunkMetadata } from './chunks/metadata';
+import { JoplinChunkRepository, type StoredChunk } from './chunks/repository';
+import { SplitChunkService } from './chunks/splitting';
 import type { JoplinSourceNote } from './chunks/types';
 import {
 	handleDueChunksPanelMessage,
@@ -20,6 +23,8 @@ joplin.plugins.register({
 		const enableService = new EnableIncrementalReadingService(repository, ankiGateway);
 		const reviewQueue = new AnkiReviewQueueService(ankiGateway, repository);
 		const gradingService = new GradeChunkService(ankiGateway, repository);
+		const splitService = new SplitChunkService(repository, ankiGateway);
+		const cardCreationService = new CardCreationService(repository, ankiGateway);
 		const duePanelHandle = await joplin.views.panels.create('irAnkiDueChunksPanel');
 
 		const showDueChunks = async () => {
@@ -61,6 +66,61 @@ joplin.plugins.register({
 			execute: showDueChunks,
 		});
 
+		await joplin.commands.register({
+			name: 'irAnkiSplitCurrentChunk',
+			label: 'Split Current IR Chunk',
+			iconName: 'fas fa-code-branch',
+			execute: async () => {
+				try {
+					const chunk = await selectedStoredChunk();
+					const result = await splitService.split(chunk);
+
+					await joplin.views.dialogs.showToast({
+						message: `Split chunk into ${result.children.length} child chunks.`,
+						type: ToastType.Success,
+					});
+				} catch (error) {
+					await joplin.views.dialogs.showMessageBox(errorMessage(error));
+				}
+			},
+		});
+
+		await joplin.commands.register({
+			name: 'irAnkiCreateBasicCard',
+			label: 'Create Basic Card from Chunk',
+			iconName: 'fas fa-clone',
+			execute: async () => {
+				try {
+					await cardCreationService.createBasicCard(await selectedStoredChunk());
+
+					await joplin.views.dialogs.showToast({
+						message: 'Created Basic Anki card.',
+						type: ToastType.Success,
+					});
+				} catch (error) {
+					await joplin.views.dialogs.showMessageBox(errorMessage(error));
+				}
+			},
+		});
+
+		await joplin.commands.register({
+			name: 'irAnkiCreateClozeCard',
+			label: 'Create Cloze Card from Chunk',
+			iconName: 'fas fa-highlighter',
+			execute: async () => {
+				try {
+					await cardCreationService.createClozeCard(await selectedStoredChunk());
+
+					await joplin.views.dialogs.showToast({
+						message: 'Created Cloze Anki card.',
+						type: ToastType.Success,
+					});
+				} catch (error) {
+					await joplin.views.dialogs.showMessageBox(errorMessage(error));
+				}
+			},
+		});
+
 		await joplin.views.menuItems.create(
 			'irAnkiEnableCurrentNoteMenuItem',
 			'irAnkiEnableCurrentNote',
@@ -70,6 +130,24 @@ joplin.plugins.register({
 		await joplin.views.menuItems.create(
 			'irAnkiShowDueChunksMenuItem',
 			'irAnkiShowDueChunks',
+			MenuItemLocation.Tools,
+		);
+
+		await joplin.views.menuItems.create(
+			'irAnkiSplitCurrentChunkMenuItem',
+			'irAnkiSplitCurrentChunk',
+			MenuItemLocation.Tools,
+		);
+
+		await joplin.views.menuItems.create(
+			'irAnkiCreateBasicCardMenuItem',
+			'irAnkiCreateBasicCard',
+			MenuItemLocation.Tools,
+		);
+
+		await joplin.views.menuItems.create(
+			'irAnkiCreateClozeCardMenuItem',
+			'irAnkiCreateClozeCard',
 			MenuItemLocation.Tools,
 		);
 
@@ -105,6 +183,29 @@ async function selectedSourceNote(): Promise<JoplinSourceNote> {
 		id: String(note.id),
 		title: String(note.title ?? ''),
 		body: String(note.body ?? ''),
+	};
+}
+
+async function selectedStoredChunk(): Promise<StoredChunk> {
+	const selected = await joplin.workspace.selectedNote();
+
+	if (!selected?.id) {
+		throw new Error('Select an IR chunk note first.');
+	}
+
+	const note = await joplin.data.get(['notes', selected.id], {
+		fields: ['id', 'title', 'body'],
+	});
+	const parsed = parseChunkMetadata(String(note.body ?? ''));
+
+	if (!parsed) {
+		throw new Error('Select an IR chunk note first.');
+	}
+
+	return {
+		chunk: parsed.chunk,
+		joplinNoteId: String(note.id),
+		title: String(note.title ?? ''),
 	};
 }
 
