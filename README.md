@@ -10,21 +10,16 @@ source note and, later, to any scheduler or study cards created in Anki.
 
 ## Current Status
 
-The repository currently builds a minimal plugin that verifies the Joplin
-plugin setup works. On startup, it logs:
-
-```text
-Hello world. Test plugin started!
-```
-
-The first product milestone is M1:
+M1 is implemented as a working MVP:
 
 - Heading-based chunk extraction.
-- Local chunk repository.
+- Joplin-backed chunk repository using an `IR Chunks` notebook.
+- YAML metadata serialization and parsing.
 - Minimal AnkiConnect gateway.
 - Scheduler notes using the `IRChunk` model.
 - Mapping from `chunkId` to `ankiCardId`.
-- A simple Due Chunks panel in Joplin.
+- `Tools > Enable Incremental Reading`.
+- `Tools > Show Due Chunks`.
 
 Out of scope for M1:
 
@@ -53,6 +48,18 @@ The generated plugin archive is written to:
 publish/joplin.plugin.ir-anki.jpl
 ```
 
+Run unit tests:
+
+```bash
+npm test
+```
+
+Check dependencies for known advisories:
+
+```bash
+npm audit
+```
+
 ## Import Into Joplin
 
 For testing, use Joplin's development mode so the plugin runs against a
@@ -75,19 +82,51 @@ After restart, `Tools > Options > Plugins` should list:
 Joplin Incremental Reading
 ```
 
-## Smoke Test
+## AnkiConnect Setup
 
-The current minimal plugin does not add UI yet. To verify that it loaded,
-check the startup log for:
+M1 requires Anki Desktop with the AnkiConnect add-on running locally at:
 
 ```text
-Hello world. Test plugin started!
+http://127.0.0.1:8765
 ```
 
-Useful places to check:
+When incremental reading is enabled, the plugin creates missing Anki
+resources automatically:
 
-- `Help > Toggle Development Tools`, then the Console tab.
-- Joplin's log screen, filtering for `joplin.plugin.ir-anki`.
+- Deck: `IR::Chunks::<sourceNoteId>`
+- Note type: `IRChunk`
+
+If AnkiConnect is unavailable, enabling incremental reading fails with a
+message and any chunk notes created during that failed attempt are deleted.
+
+## Smoke Test
+
+Use a test note with Markdown headings, for example:
+
+```markdown
+# Section One
+
+Some text.
+
+# Section Two
+
+More text.
+```
+
+Then:
+
+1. Start Anki Desktop.
+2. Confirm AnkiConnect is enabled.
+3. Build and load the plugin in Joplin development mode.
+4. Select the test note in Joplin.
+5. Run `Tools > Enable Incremental Reading`.
+6. Confirm Joplin created an `IR Chunks` notebook with chunk notes.
+7. Confirm Anki created scheduler cards using the `IRChunk` note type.
+8. Run `Tools > Show Due Chunks`.
+9. Confirm the Due Chunks panel lists due chunk notes.
+
+The Due Chunks panel is read-only in M1. Review grading is planned for a
+later milestone.
 
 ## Development Plugin Path
 
