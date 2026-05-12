@@ -20,7 +20,7 @@ test('renderDueChunksHtml shows an empty state', () => {
 
 test('renderDueChunksHtml renders escaped chunk links', () => {
 	const html = renderDueChunksHtml([
-		storedChunk('note id/1', 'Chunk <One>', 'Source & Note'),
+		storedChunk('note id/1', 'Chunk <One>', 'Source & Note', 456),
 	]);
 
 	assert.match(
@@ -29,6 +29,29 @@ test('renderDueChunksHtml renders escaped chunk links', () => {
 	);
 	assert.match(html, /Chunk &lt;One&gt;/);
 	assert.match(html, /Source &amp; Note/);
+});
+
+test('renderDueChunksHtml renders grade buttons with panel messages', () => {
+	const html = renderDueChunksHtml([
+		storedChunk('note_1', 'Chunk One', 'Source Note', 456),
+	]);
+
+	assert.match(html, />Again<\/button>/);
+	assert.match(html, />Hard<\/button>/);
+	assert.match(html, />Good<\/button>/);
+	assert.match(html, />Easy<\/button>/);
+	assert.match(html, /type: 'grade', ankiCardId: 456, rating: 1/);
+	assert.match(html, /type: 'grade', ankiCardId: 456, rating: 2/);
+	assert.match(html, /type: 'grade', ankiCardId: 456, rating: 3/);
+	assert.match(html, /type: 'grade', ankiCardId: 456, rating: 4/);
+});
+
+test('renderDueChunksHtml shows missing scheduler card state', () => {
+	const html = renderDueChunksHtml([
+		storedChunk('note_1', 'Chunk One', 'Source Note'),
+	]);
+
+	assert.match(html, /Missing scheduler card\./);
 });
 
 test('renderDueChunksErrorHtml renders escaped errors', () => {
@@ -40,8 +63,8 @@ test('renderDueChunksErrorHtml renders escaped errors', () => {
 test('refreshDueChunksPanel writes panel HTML and returns due count', async () => {
 	const panels = new FakePanelApi();
 	const chunks = [
-		storedChunk('note_1', 'Chunk One', 'Source Note'),
-		storedChunk('note_2', 'Chunk Two', 'Source Note'),
+		storedChunk('note_1', 'Chunk One', 'Source Note', 1),
+		storedChunk('note_2', 'Chunk Two', 'Source Note', 2),
 	];
 
 	const count = await refreshDueChunksPanel('panel_1', panels, {
@@ -58,6 +81,7 @@ function storedChunk(
 	joplinNoteId: string,
 	title: string,
 	sourceNoteTitle: string,
+	ankiCardId?: number,
 ): StoredChunk {
 	const [chunk] = extractHeadingChunks({
 		id: 'sourceA',
@@ -66,7 +90,13 @@ function storedChunk(
 	}, { now: 1234 });
 
 	return {
-		chunk,
+		chunk: {
+			...chunk,
+			scheduler: {
+				...chunk.scheduler,
+				ankiCardId,
+			},
+		},
 		joplinNoteId,
 		title,
 	};

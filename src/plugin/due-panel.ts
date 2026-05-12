@@ -42,10 +42,36 @@ function renderChunkList(chunks: StoredChunk[]): string {
 		<li>
 			<a href="${joplinNoteUrl(stored.joplinNoteId)}">${escapeHtml(stored.title)}</a>
 			<span>${escapeHtml(stored.chunk.sourceNoteTitle)}</span>
+			${renderGradeControls(stored)}
 		</li>
 	`).join('');
 
 	return `<ol>${items}</ol>`;
+}
+
+function renderGradeControls(stored: StoredChunk): string {
+	const cardId = stored.chunk.scheduler.ankiCardId;
+	if (typeof cardId !== 'number') {
+		return '<p class="missing-card">Missing scheduler card.</p>';
+	}
+
+	return `
+		<div class="grades" aria-label="Grade ${escapeHtml(stored.title)}">
+			${gradeButton(cardId, 1, 'Again')}
+			${gradeButton(cardId, 2, 'Hard')}
+			${gradeButton(cardId, 3, 'Good')}
+			${gradeButton(cardId, 4, 'Easy')}
+		</div>
+	`;
+}
+
+function gradeButton(cardId: number, rating: number, label: string): string {
+	return `
+		<button
+			type="button"
+			onclick="webviewApi.postMessage({ type: 'grade', ankiCardId: ${cardId}, rating: ${rating} })"
+		>${label}</button>
+	`;
 }
 
 function panelShell(content: string): string {
@@ -102,13 +128,21 @@ function panelShell(content: string): string {
 
 		span,
 		.empty,
-		.error {
+		.error,
+		.missing-card {
 			color: rgba(127, 127, 127, 0.9);
 			font-size: 12px;
 		}
 
 		.error {
 			color: #b00020;
+		}
+
+		.grades {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 4px;
+			margin-top: 6px;
 		}
 	</style>
 </head>
