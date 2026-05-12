@@ -53,6 +53,8 @@ Out of scope:
 
 Goal: review due chunks in Joplin and send grades to Anki scheduler cards.
 
+Status: implemented.
+
 Implementation steps:
 
 1. Extend the Anki gateway for review grading.

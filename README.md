@@ -10,7 +10,7 @@ source note and, later, to any scheduler or study cards created in Anki.
 
 ## Current Status
 
-M1 is implemented as a working MVP:
+M1 and M2 are implemented as a working review-loop MVP:
 
 - Heading-based chunk extraction.
 - Joplin-backed chunk repository using an `IR Chunks` notebook.
@@ -20,13 +20,15 @@ M1 is implemented as a working MVP:
 - Mapping from `chunkId` to `ankiCardId`.
 - `Tools > Enable Incremental Reading`.
 - `Tools > Show Due Chunks`.
+- Due chunk grading in Joplin with Anki scheduler sync.
+- Scheduler metadata sync back into chunk YAML.
 
-Out of scope for M1:
+Out of scope:
 
-- Grading.
 - Splitting.
 - Created study cards.
 - Staleness detection.
+- Editing chunk text during review.
 
 ## Build
 
@@ -84,7 +86,8 @@ Joplin Incremental Reading
 
 ## AnkiConnect Setup
 
-M1 requires Anki Desktop with the AnkiConnect add-on running locally at:
+The plugin requires Anki Desktop with the AnkiConnect add-on running
+locally at:
 
 ```text
 http://127.0.0.1:8765
@@ -124,9 +127,12 @@ Then:
 7. Confirm Anki created scheduler cards using the `IRChunk` note type.
 8. Run `Tools > Show Due Chunks`.
 9. Confirm the Due Chunks panel lists due chunk notes.
+10. Click `Again`, `Hard`, `Good`, or `Easy` for a due chunk.
+11. Confirm the panel refreshes after grading.
+12. Confirm the chunk note YAML updates `scheduler.lastSyncAt`.
 
-The Due Chunks panel is read-only in M1. Review grading is planned for a
-later milestone.
+The Due Chunks panel is read-only for chunk text. Splitting chunks and
+creating study cards are planned for a later milestone.
 
 ## Development Plugin Path
 
