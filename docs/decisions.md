@@ -50,3 +50,21 @@ The card creation service refuses duplicate active cards for the same model,
 chunk version, and text hash. If the current chunk note body changed since
 the last stored text hash, card creation advances the chunk version and
 marks older created-card links for that chunk text as `stale`.
+
+## D008 — AnkiConnect requests use closed HTTP connections
+
+Sequential Node `http.request` calls against AnkiConnect can fail with
+`socket hang up` when a previous request connection is reused. The plugin
+therefore sends each AnkiConnect request with `Connection: close` and
+`agent: false`. This keeps the gateway simple and matches the local
+AnkiConnect behavior verified during manual testing.
+
+Transport-level failures include the AnkiConnect action name in the error
+message so the failing request is visible in Joplin dialogs.
+
+## D009 — Due panel opens chunks via plugin messages
+
+The Due Chunks panel does not navigate directly to `joplin://` URLs because
+Joplin's panel webview can block that scheme with Content Security Policy
+errors. Chunk titles post an `openChunk` message to the plugin, and the
+plugin opens the note through Joplin's command API.

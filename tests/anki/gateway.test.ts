@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
+import { createServer } from 'http';
 
 import {
 	AnkiConnectGateway,
@@ -282,6 +283,57 @@ test('AnkiConnect errors include the failing action name', async () => {
 		() => gateway.getDueChunkCardIds(),
 		/AnkiConnect findCards failed: findCards exploded/,
 	);
+});
+
+test('AnkiConnect transport errors include the failing action name', async () => {
+	const gateway = new AnkiConnectGateway({
+		transport: async () => {
+			throw new Error('socket hang up');
+		},
+	});
+
+	await assert.rejects(
+		() => gateway.getDueChunkCardIds(),
+		/AnkiConnect findCards request failed: socket hang up/,
+	);
+});
+
+test('HTTP transport requests a closed connection for AnkiConnect compatibility', async () => {
+	let connectionHeader: string | undefined;
+	const server = createServer((request, response) => {
+		connectionHeader = request.headers.connection;
+		const chunks: Buffer[] = [];
+
+		request.on('data', chunk => chunks.push(Buffer.from(chunk)));
+		request.on('end', () => {
+			response.setHeader('Content-Type', 'application/json');
+			response.end(JSON.stringify({
+				result: [123],
+				error: null,
+			}));
+		});
+	});
+
+	await new Promise<void>((resolve, reject) => {
+		server.once('error', reject);
+		server.listen(0, '127.0.0.1', resolve);
+	});
+
+	try {
+		const address = server.address();
+		if (typeof address !== 'object' || address === null) {
+			throw new Error('Expected the test server to listen on a TCP port.');
+		}
+
+		const gateway = new AnkiConnectGateway({
+			endpoint: `http://127.0.0.1:${address.port}`,
+		});
+
+		assert.deepEqual(await gateway.getDueChunkCardIds(), [123]);
+		assert.equal(connectionHeader, 'close');
+	} finally {
+		await new Promise<void>(resolve => server.close(() => resolve()));
+	}
 });
 
 function sampleChunk(): ChunkRecord {

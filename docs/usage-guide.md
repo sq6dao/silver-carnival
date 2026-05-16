@@ -62,8 +62,8 @@ chunk notes are removed.
 Run `Tools > Show Due Chunks`.
 
 The Due Chunks panel lists active chunks whose Anki scheduler cards are new
-or due. Open the chunk from the panel, read it in Joplin, then grade it from
-the panel:
+or due. Click the chunk title in the panel to open the chunk note in
+Joplin, read it there, then grade it from the panel:
 
 - `Again`
 - `Hard`
@@ -73,6 +73,9 @@ the panel:
 The grade is sent to Anki for the scheduler card. The plugin then refreshes
 the panel and writes scheduler metadata such as `lastSyncAt` back into the
 chunk note YAML.
+
+The panel opens chunks through the plugin API rather than through
+`joplin://` links, which avoids webview Content Security Policy blocking.
 
 Do not review `IRChunk` scheduler cards directly in Anki. They exist only to
 drive the Joplin review queue.
@@ -166,6 +169,10 @@ If enabling, grading, splitting, or card creation fails:
    source note for enabling, active IR chunk note for split/card commands.
 5. Check the error dialog shown by Joplin for the specific failing step.
 
+If an error starts with `AnkiConnect <action> request failed`, the action name
+identifies the request that failed. The gateway sends AnkiConnect requests as
+short-lived HTTP connections to avoid connection reuse resets.
+
 Common causes:
 
 - Anki is not running.
@@ -174,6 +181,11 @@ Common causes:
 - The chunk has already been superseded.
 - The chunk has no scheduler card.
 - A Cloze card command was run without `{{c1::...}}` syntax.
+
+Manual smoke testing has covered enabling incremental reading, opening due
+chunks from the panel, grading scheduler cards, splitting chunks, creating
+Basic cards, duplicate Basic-card rejection, creating Cloze cards, and
+rejecting Cloze creation without cloze syntax.
 
 ## Generated Resources
 

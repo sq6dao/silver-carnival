@@ -160,6 +160,9 @@ joplin.plugins.register({
 		await joplin.views.panels.onMessage(duePanelHandle, async message => {
 			await handleDueChunksPanelMessage(message, {
 				grading: gradingService,
+				noteOpener: {
+					openNote: noteId => joplin.commands.execute('openNote', noteId),
+				},
 				panelHandle: duePanelHandle,
 				panels: joplin.views.panels,
 				reviewQueue,

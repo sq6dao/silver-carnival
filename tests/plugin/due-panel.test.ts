@@ -20,15 +20,14 @@ test('renderDueChunksHtml shows an empty state', () => {
 	assert.match(html, /No due chunks\./);
 });
 
-test('renderDueChunksHtml renders escaped chunk links', () => {
+test('renderDueChunksHtml renders escaped chunk open buttons', () => {
 	const html = renderDueChunksHtml([
 		storedChunk('note id/1', 'Chunk <One>', 'Source & Note', 456),
 	]);
 
-	assert.match(
-		html,
-		/joplin:\/\/x-callback-url\/openNote\?id=note%20id%2F1/,
-	);
+	assert.doesNotMatch(html, /joplin:\/\/x-callback-url/);
+	assert.match(html, /&quot;type&quot;:&quot;openChunk&quot;/);
+	assert.match(html, /&quot;joplinNoteId&quot;:&quot;note id\/1&quot;/);
 	assert.match(html, /Chunk &lt;One&gt;/);
 	assert.match(html, /Source &amp; Note/);
 });
@@ -42,10 +41,10 @@ test('renderDueChunksHtml renders grade buttons with panel messages', () => {
 	assert.match(html, />Hard<\/button>/);
 	assert.match(html, />Good<\/button>/);
 	assert.match(html, />Easy<\/button>/);
-	assert.match(html, /type: 'grade', ankiCardId: 456, rating: 1/);
-	assert.match(html, /type: 'grade', ankiCardId: 456, rating: 2/);
-	assert.match(html, /type: 'grade', ankiCardId: 456, rating: 3/);
-	assert.match(html, /type: 'grade', ankiCardId: 456, rating: 4/);
+	assert.match(html, /&quot;type&quot;:&quot;grade&quot;,&quot;ankiCardId&quot;:456,&quot;rating&quot;:1/);
+	assert.match(html, /&quot;type&quot;:&quot;grade&quot;,&quot;ankiCardId&quot;:456,&quot;rating&quot;:2/);
+	assert.match(html, /&quot;type&quot;:&quot;grade&quot;,&quot;ankiCardId&quot;:456,&quot;rating&quot;:3/);
+	assert.match(html, /&quot;type&quot;:&quot;grade&quot;,&quot;ankiCardId&quot;:456,&quot;rating&quot;:4/);
 });
 
 test('renderDueChunksHtml shows missing scheduler card state', () => {
@@ -84,6 +83,7 @@ test('handleDueChunksPanelMessage refreshes and shows the panel', async () => {
 
 	const handled = await handleDueChunksPanelMessage({ type: 'refresh' }, {
 		grading: new FakeGradingService(),
+		noteOpener: new FakeNoteOpener(),
 		panelHandle: 'panel_1',
 		panels,
 		reviewQueue: {
@@ -107,6 +107,7 @@ test('handleDueChunksPanelMessage grades then refreshes the panel', async () => 
 		rating: 3,
 	}, {
 		grading,
+		noteOpener: new FakeNoteOpener(),
 		panelHandle: 'panel_1',
 		panels,
 		reviewQueue: {
@@ -120,6 +121,26 @@ test('handleDueChunksPanelMessage grades then refreshes the panel', async () => 
 	assert.match(panels.html, /No due chunks\./);
 });
 
+test('handleDueChunksPanelMessage opens chunks through the plugin API', async () => {
+	const noteOpener = new FakeNoteOpener();
+
+	const handled = await handleDueChunksPanelMessage({
+		type: 'openChunk',
+		joplinNoteId: 'note_1',
+	}, {
+		grading: new FakeGradingService(),
+		noteOpener,
+		panelHandle: 'panel_1',
+		panels: new FakePanelApi(),
+		reviewQueue: {
+			getDueChunks: async () => [],
+		},
+	});
+
+	assert.equal(handled, true);
+	assert.deepEqual(noteOpener.calls, ['note_1']);
+});
+
 test('handleDueChunksPanelMessage renders panel error when grading fails', async () => {
 	const panels = new FakePanelApi();
 	const grading = new FakeGradingService();
@@ -131,6 +152,7 @@ test('handleDueChunksPanelMessage renders panel error when grading fails', async
 		rating: 3,
 	}, {
 		grading,
+		noteOpener: new FakeNoteOpener(),
 		panelHandle: 'panel_1',
 		panels,
 		reviewQueue: {
@@ -146,6 +168,7 @@ test('handleDueChunksPanelMessage renders panel error when grading fails', async
 test('handleDueChunksPanelMessage ignores unknown messages', async () => {
 	const handled = await handleDueChunksPanelMessage({ type: 'unknown' }, {
 		grading: new FakeGradingService(),
+		noteOpener: new FakeNoteOpener(),
 		panelHandle: 'panel_1',
 		panels: new FakePanelApi(),
 		reviewQueue: {
@@ -206,5 +229,13 @@ class FakeGradingService {
 		if (this.error) throw this.error;
 
 		this.calls.push(input);
+	}
+}
+
+class FakeNoteOpener {
+	public calls: string[] = [];
+
+	public async openNote(noteId: string): Promise<void> {
+		this.calls.push(noteId);
 	}
 }

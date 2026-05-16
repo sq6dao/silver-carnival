@@ -12,8 +12,13 @@ export interface GradeChunkServiceApi {
 	grade(input: GradeChunkInput): Promise<unknown>;
 }
 
+export interface NoteOpenerApi {
+	openNote(noteId: string): Promise<unknown>;
+}
+
 export interface DueChunksPanelMessageDependencies {
 	grading: GradeChunkServiceApi;
+	noteOpener: NoteOpenerApi;
 	panelHandle: string;
 	panels: PanelApi;
 	reviewQueue: ReviewQueueService;
@@ -25,6 +30,11 @@ export async function handleDueChunksPanelMessage(
 ): Promise<boolean> {
 	if (isRefreshMessage(message)) {
 		await refreshAndShowPanel(dependencies);
+		return true;
+	}
+
+	if (isOpenChunkMessage(message)) {
+		await dependencies.noteOpener.openNote(message.joplinNoteId);
 		return true;
 	}
 
@@ -73,7 +83,7 @@ export function renderDueChunksHtml(chunks: StoredChunk[]): string {
 	return panelShell(`
 		<header>
 			<h1>Due Chunks</h1>
-			<button type="button" onclick="webviewApi.postMessage({ type: 'refresh' })">Refresh</button>
+			<button type="button" ${postMessageOnClick({ type: 'refresh' })}>Refresh</button>
 		</header>
 		${chunks.length ? renderChunkList(chunks) : '<p class="empty">No due chunks.</p>'}
 	`);
@@ -83,7 +93,7 @@ export function renderDueChunksErrorHtml(message: string): string {
 	return panelShell(`
 		<header>
 			<h1>Due Chunks</h1>
-			<button type="button" onclick="webviewApi.postMessage({ type: 'refresh' })">Refresh</button>
+			<button type="button" ${postMessageOnClick({ type: 'refresh' })}>Refresh</button>
 		</header>
 		<p class="error">${escapeHtml(message)}</p>
 	`);
@@ -92,7 +102,11 @@ export function renderDueChunksErrorHtml(message: string): string {
 function renderChunkList(chunks: StoredChunk[]): string {
 	const items = chunks.map(stored => `
 		<li>
-			<a href="${joplinNoteUrl(stored.joplinNoteId)}">${escapeHtml(stored.title)}</a>
+			<button
+				type="button"
+				class="chunk-link"
+				${postMessageOnClick({ type: 'openChunk', joplinNoteId: stored.joplinNoteId })}
+			>${escapeHtml(stored.title)}</button>
 			<span>${escapeHtml(stored.chunk.sourceNoteTitle)}</span>
 			${renderGradeControls(stored)}
 		</li>
@@ -121,7 +135,7 @@ function gradeButton(cardId: number, rating: number, label: string): string {
 	return `
 		<button
 			type="button"
-			onclick="webviewApi.postMessage({ type: 'grade', ankiCardId: ${cardId}, rating: ${rating} })"
+			${postMessageOnClick({ type: 'grade', ankiCardId: cardId, rating })}
 		>${label}</button>
 	`;
 }
@@ -172,10 +186,16 @@ function panelShell(content: string): string {
 			padding: 8px 0;
 		}
 
-		a {
+		.chunk-link {
+			background: none;
+			border: 0;
+			color: inherit;
+			cursor: pointer;
 			display: block;
 			font-weight: 600;
 			margin-bottom: 2px;
+			padding: 0;
+			text-align: left;
 		}
 
 		span,
@@ -204,8 +224,8 @@ function panelShell(content: string): string {
 </html>`;
 }
 
-function joplinNoteUrl(noteId: string): string {
-	return `joplin://x-callback-url/openNote?id=${encodeURIComponent(noteId)}`;
+function postMessageOnClick(message: Record<string, unknown>): string {
+	return `onclick="webviewApi.postMessage(${escapeHtml(JSON.stringify(message))})"`;
 }
 
 function escapeHtml(value: string): string {
@@ -219,6 +239,18 @@ function escapeHtml(value: string): string {
 
 function isRefreshMessage(value: unknown): value is { type: 'refresh' } {
 	return isRecord(value) && value.type === 'refresh';
+}
+
+function isOpenChunkMessage(value: unknown): value is {
+	type: 'openChunk';
+	joplinNoteId: string;
+} {
+	return (
+		isRecord(value) &&
+		value.type === 'openChunk' &&
+		typeof value.joplinNoteId === 'string' &&
+		value.joplinNoteId.length > 0
+	);
 }
 
 function isGradeMessage(value: unknown): value is {

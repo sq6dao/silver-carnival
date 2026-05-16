@@ -210,11 +210,17 @@ export class AnkiConnectGateway implements AnkiGateway {
 	}
 
 	private async invoke<T>(action: string, params?: Record<string, unknown>): Promise<T> {
-		const response = await this.transport({
-			action,
-			version: ANKI_CONNECT_VERSION,
-			params,
-		});
+		let response: AnkiConnectResponse;
+
+		try {
+			response = await this.transport({
+				action,
+				version: ANKI_CONNECT_VERSION,
+				params,
+			});
+		} catch (error) {
+			throw new Error(`AnkiConnect ${action} request failed: ${transportErrorMessage(error)}`);
+		}
 
 		if (response.error) {
 			throw new Error(`AnkiConnect ${action} failed: ${response.error}`);
@@ -334,7 +340,9 @@ function createHttpTransport(endpoint: string): AnkiConnectTransport {
 				port: endpointUrl.port || '80',
 				path: endpointUrl.pathname || '/',
 				method: 'POST',
+				agent: false,
 				headers: {
+					'Connection': 'close',
 					'Content-Type': 'application/json',
 					'Content-Length': Buffer.byteLength(body),
 				},
@@ -412,4 +420,10 @@ function isAnkiConnectResponse(value: unknown): value is AnkiConnectResponse {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function transportErrorMessage(error: unknown): string {
+	if (error instanceof Error) return error.message;
+
+	return String(error);
 }
