@@ -29,7 +29,7 @@ Core principles:
 A chunk is a standalone Joplin note containing:
 
 - Excerpt content.
-- YAML metadata at the top of the note.
+- YAML metadata at the end of the note.
 - Link to the source note.
 
 Chunks are:
@@ -69,10 +69,26 @@ Chunk -> Created Cards -> Reviewed in Anki
 
 Each chunk is a Joplin note.
 
-### 4.1 YAML Metadata (Top of Note)
+### 4.1 Note Body
 
-```yaml
+The readable chunk content appears first:
+
+```markdown
+# Chunk Title (optional)
+
+<chunk content here>
+
 ---
+
+Open source note: joplin://x-callback-url/openNote?id=abc123
+```
+
+### 4.2 YAML Metadata Footer
+
+The plugin metadata appears at the end of the note in an HTML comment block:
+
+```markdown
+<!-- ir-chunk-metadata
 type: ir-chunk
 
 id: chunk_123
@@ -108,22 +124,11 @@ createdAt: 1710000000
 updatedAt: 1710000000
 version: 1
 textHash: hash_of_content
----
+-->
 ```
 
-### 4.2 Note Body
-
-Below YAML:
-
-```markdown
-# Chunk Title (optional)
-
-<chunk content here>
-
----
-
-Open source note: joplin://x-callback-url/openNote?id=abc123
-```
+Older chunk notes with top-of-note YAML frontmatter are still readable and
+are rewritten to the footer format when plugin metadata is next saved.
 
 ## 5. Data Model (TypeScript)
 

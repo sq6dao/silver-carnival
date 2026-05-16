@@ -148,9 +148,10 @@ Anki.
 
 ## Editing Chunks
 
-Chunk notes are ordinary Joplin notes, but their YAML frontmatter is plugin
-metadata. Avoid editing YAML fields unless you are intentionally repairing
-metadata.
+Chunk notes are ordinary Joplin notes. The readable chunk text appears first,
+and plugin-owned YAML metadata is stored at the end of the note in an
+`<!-- ir-chunk-metadata ... -->` block. Avoid editing YAML fields unless you
+are intentionally repairing metadata.
 
 If chunk body text changes before card creation, the plugin updates the
 chunk text hash, advances the chunk version, and marks older created-card
@@ -192,7 +193,7 @@ rejecting Cloze creation without cloze syntax.
 Joplin:
 
 - Notebook: `IR Chunks`
-- Chunk notes with YAML frontmatter and source-note links.
+- Chunk notes with source-note links and YAML metadata footers.
 
 Anki:
 

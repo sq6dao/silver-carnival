@@ -164,7 +164,7 @@ Then:
 9. Confirm the Due Chunks panel lists due chunk notes.
 10. Click `Again`, `Hard`, `Good`, or `Easy` for a due chunk.
 11. Confirm the panel refreshes after grading.
-12. Confirm the chunk note YAML updates `scheduler.lastSyncAt`.
+12. Confirm the chunk note footer YAML updates `scheduler.lastSyncAt`.
 13. Open a chunk note, insert `<!-- ir-split -->`, and run
     `Tools > Split Current IR Chunk`.
 14. Confirm child chunk notes and child scheduler cards are created, and the
@@ -172,7 +172,7 @@ Then:
 15. Select an active chunk note and run
     `Tools > Create Basic Card from Chunk`.
 16. Confirm Anki created the card in `IR::Cards::<sourceNoteId>` and the
-    chunk YAML has a new `createdCards` entry.
+    chunk footer YAML has a new `createdCards` entry.
 
 The Due Chunks panel is read-only for chunk text.
 

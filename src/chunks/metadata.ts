@@ -8,6 +8,8 @@ import type {
 } from './types';
 
 const CHUNK_FRONTMATTER_TYPE = 'ir-chunk';
+const CHUNK_METADATA_COMMENT_START = '<!-- ir-chunk-metadata';
+const CHUNK_METADATA_COMMENT_END = '-->';
 
 interface ChunkMetadata {
 	type: typeof CHUNK_FRONTMATTER_TYPE;
@@ -49,24 +51,35 @@ export function serializeChunkMetadata(chunk: ChunkRecord): string {
 
 export function renderChunkNoteBody(chunk: ChunkRecord): string {
 	return [
-		'---',
-		serializeChunkMetadata(chunk),
-		'---',
 		chunk.text,
 		'',
 		'---',
 		'',
 		`Open source note: joplin://x-callback-url/openNote?id=${chunk.sourceNoteId}`,
 		'',
+		CHUNK_METADATA_COMMENT_START,
+		serializeChunkMetadata(chunk),
+		CHUNK_METADATA_COMMENT_END,
+		'',
 	].join('\n');
 }
 
 export function parseChunkMetadata(markdown: string): { chunk: ChunkRecord; body: string } | null {
+	const footer = extractFooterMetadata(markdown);
+	if (footer) {
+		return parseChunkMetadataBlock(footer.yamlText, footer.rawBody);
+	}
+
 	const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/.exec(markdown);
 	if (!match) return null;
 
-	const yamlText = match[1];
-	const rawBody = match[2];
+	return parseChunkMetadataBlock(match[1], match[2]);
+}
+
+function parseChunkMetadataBlock(
+	yamlText: string,
+	rawBody: string,
+): { chunk: ChunkRecord; body: string } | null {
 	let parsed: unknown;
 
 	try {
@@ -87,6 +100,26 @@ export function parseChunkMetadata(markdown: string): { chunk: ChunkRecord; body
 	return {
 		chunk: metadataToChunk(metadata, body),
 		body,
+	};
+}
+
+function extractFooterMetadata(markdown: string): { yamlText: string; rawBody: string } | null {
+	const trimmedMarkdown = markdown.replace(/\s+$/, '');
+	const end = trimmedMarkdown.lastIndexOf(CHUNK_METADATA_COMMENT_END);
+	if (end < 0 || end + CHUNK_METADATA_COMMENT_END.length !== trimmedMarkdown.length) {
+		return null;
+	}
+
+	const start = trimmedMarkdown.lastIndexOf(CHUNK_METADATA_COMMENT_START, end);
+	if (start < 0) return null;
+
+	const yamlStart = start + CHUNK_METADATA_COMMENT_START.length;
+	const yamlText = trimmedMarkdown.slice(yamlStart, end).replace(/^\r?\n/, '').trim();
+	const rawBody = trimmedMarkdown.slice(0, start);
+
+	return {
+		yamlText,
+		rawBody,
 	};
 }
 

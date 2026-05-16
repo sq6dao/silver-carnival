@@ -68,3 +68,14 @@ The Due Chunks panel does not navigate directly to `joplin://` URLs because
 Joplin's panel webview can block that scheme with Content Security Policy
 errors. Chunk titles post an `openChunk` message to the plugin, and the
 plugin opens the note through Joplin's command API.
+
+## D010 — Chunk metadata lives at the end of notes
+
+Chunk notes render readable content first and store plugin-owned YAML in a
+footer HTML comment block. This keeps review text prominent when a chunk is
+opened in Joplin while preserving local-first YAML provenance in the note
+body.
+
+The parser remains backward compatible with earlier top-of-note YAML
+frontmatter. When an existing chunk is updated by the plugin, it is rewritten
+with footer metadata.

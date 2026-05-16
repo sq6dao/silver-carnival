@@ -9,19 +9,20 @@ import {
 } from '../../src/chunks/metadata';
 import type { ChunkRecord } from '../../src/chunks/types';
 
-test('renderChunkNoteBody emits frontmatter, body text, and source link', () => {
+test('renderChunkNoteBody emits body text, source link, and footer metadata', () => {
 	const chunk = sampleChunk();
 
 	const rendered = renderChunkNoteBody(chunk);
 
-	assert.ok(rendered.startsWith('---\ntype: ir-chunk\n'));
+	assert.ok(rendered.startsWith('# First\nBody.\n\n---\n\nOpen source note:'));
+	assert.match(rendered, /<!-- ir-chunk-metadata\ntype: ir-chunk\n/);
 	assert.match(rendered, /^parentChunkId: null$/m);
 	assert.match(rendered, /^  ankiNoteId: null$/m);
-	assert.match(rendered, /^# First$/m);
 	assert.match(
 		rendered,
 		/Open source note: joplin:\/\/x-callback-url\/openNote\?id=note123/,
 	);
+	assert.ok(rendered.endsWith('-->\n'));
 });
 
 test('parseChunkMetadata round-trips a rendered unscheduled chunk', () => {
@@ -34,26 +35,49 @@ test('parseChunkMetadata round-trips a rendered unscheduled chunk', () => {
 	assert.deepEqual(parsed.chunk, chunk);
 });
 
-test('parseChunkMetadata returns null for notes without frontmatter', () => {
+test('parseChunkMetadata parses legacy frontmatter chunks', () => {
+	const chunk = sampleChunk();
+	const legacyBody = [
+		'---',
+		serializeChunkMetadata(chunk),
+		'---',
+		chunk.text,
+		'',
+		'---',
+		'',
+		`Open source note: joplin://x-callback-url/openNote?id=${chunk.sourceNoteId}`,
+		'',
+	].join('\n');
+
+	const parsed = parseChunkMetadata(legacyBody);
+
+	assert.ok(parsed);
+	assert.equal(parsed.body, chunk.text);
+	assert.deepEqual(parsed.chunk, chunk);
+});
+
+test('parseChunkMetadata returns null for notes without chunk metadata', () => {
 	assert.equal(parseChunkMetadata('# Plain note\nBody.'), null);
 });
 
-test('parseChunkMetadata returns null for other frontmatter types', () => {
-	const parsed = parseChunkMetadata(`---
+test('parseChunkMetadata returns null for other metadata types', () => {
+	const parsed = parseChunkMetadata(`# Body
+
+<!-- ir-chunk-metadata
 type: other-note
----
-Body.`);
+-->`);
 
 	assert.equal(parsed, null);
 });
 
 test('parseChunkMetadata throws a useful error for malformed YAML', () => {
 	assert.throws(
-		() => parseChunkMetadata(`---
+		() => parseChunkMetadata(`# Body
+
+<!-- ir-chunk-metadata
 type: ir-chunk
 id: [
----
-Body.`),
+-->`),
 		/Invalid chunk metadata YAML/,
 	);
 });
