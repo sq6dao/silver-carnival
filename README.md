@@ -196,6 +196,7 @@ This avoids manually selecting the `.jpl` file after every change.
 ## References
 
 - [Usage guide](docs/usage-guide.md)
+- [Manual test runbook](docs/test-runbook.md)
 - [Design spec](docs/design-spec.md)
 - [Roadmap](docs/roadmap.md)
 - [Decisions](docs/decisions.md)
